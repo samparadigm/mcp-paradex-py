@@ -3,13 +3,16 @@ Paradex API client utilities.
 """
 
 import asyncio
+import ipaddress
 import logging
 import time
+import urllib.request
 from contextvars import ContextVar
 from typing import Any, cast
 
 import httpx
 from paradex_py.account.account import ParadexAccount
+from paradex_py.account.external_signer import ExternalSignerAccount, HeaderSigner
 from paradex_py.account.subkey_account import SubkeyAccount
 from paradex_py.api.api_client import ParadexApiClient
 from paradex_py.api.protocols import DefaultRetryStrategy
@@ -27,16 +30,52 @@ _client_lock = asyncio.Lock()
 _request_bearer_token: ContextVar[str | None] = ContextVar("bearer_token", default=None)
 
 
-def _make_jwt_client(jwt: str) -> ParadexApiClient:
-    """Create a Paradex client authenticated with a JWT token (no private key needed)."""
-    http_client = httpx.Client(
+def _proxy_mounts() -> dict[str, httpx.BaseTransport | None]:
+    """The proxy mounts httpx builds from HTTP(S)_PROXY, ALL_PROXY and NO_PROXY with trust_env."""
+    env = urllib.request.getproxies()
+    no_proxy = [host.strip() for host in env.get("no", "").split(",") if host.strip()]
+    if "*" in no_proxy:
+        return {}
+    mounts: dict[str, httpx.BaseTransport | None] = {}
+    for scheme in ("http", "https", "all"):
+        if url := env.get(scheme):
+            proxy = url if "://" in url else f"http://{url}"
+            mounts[f"{scheme}://"] = httpx.HTTPTransport(proxy=proxy, retries=1)
+    for host in no_proxy:
+        mounts[_no_proxy_pattern(host)] = None
+    return mounts
+
+
+def _no_proxy_pattern(host: str) -> str:
+    if "://" in host:
+        return host
+    address = host.split("/")[0]
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return f"all://{host}" if host.lower() == "localhost" else f"all://*{host}"
+    return f"all://[{host}]" if ip.version == 6 else f"all://{host}"
+
+
+def _http_client() -> httpx.Client:
+    """An httpx client whose connections retry once, so a stale pooled connection reconnects.
+
+    A client given its own transport skips proxy env vars, so the proxies are mounted here.
+    httpx still reads SSL_CERT_FILE and SSL_CERT_DIR for every transport.
+    """
+    return httpx.Client(
         transport=httpx.HTTPTransport(retries=1),
+        mounts=_proxy_mounts(),
         timeout=httpx.Timeout(30.0),
     )
+
+
+def _make_jwt_client(jwt: str) -> ParadexApiClient:
+    """Create a Paradex client authenticated with a JWT token (no private key needed)."""
     client = ParadexApiClient(
         env=cast(Any, config.ENVIRONMENT),
         logger=logger,
-        http_client=cast(Any, http_client),
+        http_client=cast(Any, _http_client()),
         auto_auth=False,
         retry_strategy=DefaultRetryStrategy(),
         auth_params={"token_usage": "interactive"},
@@ -70,24 +109,40 @@ async def get_paradex_client() -> ParadexApiClient:
         if _paradex_client is not None:
             return _paradex_client
 
+        if signer_error := config.signer_config_error():
+            raise ValueError(signer_error)
+        if config.PARADEX_SIGNER_HEADER and config.PARADEX_ACCOUNT_PRIVATE_KEY:
+            logger.warning(
+                "PARADEX_SIGNER_HEADER and PARADEX_ACCOUNT_PRIVATE_KEY are both set; "
+                "using the signer and ignoring the private key"
+            )
+
         logger.info("Initializing Paradex client env=%s", config.ENVIRONMENT)
-        # retries=1 on the transport causes httpx to retry automatically on a fresh
-        # connection when a pooled connection is stale (e.g. after a Lambda freeze).
-        http_client = httpx.Client(
-            transport=httpx.HTTPTransport(retries=1),
-            timeout=httpx.Timeout(30.0),
-        )
-        _paradex_client = ParadexApiClient(
+        client = ParadexApiClient(
             env=cast(Any, config.ENVIRONMENT),
             logger=logger,
-            http_client=cast(Any, http_client),
+            http_client=cast(Any, _http_client()),
             retry_strategy=DefaultRetryStrategy(),
             auth_params={"token_usage": "interactive"},
         )
-        logger.info("Paradex client api_url=%s", _paradex_client.api_url)
+        logger.info("Paradex client api_url=%s", client.api_url)
 
-        if config.PARADEX_ACCOUNT_PRIVATE_KEY:
-            response = _paradex_client.fetch_system_config()
+        if config.PARADEX_SIGNER_HEADER:
+            logger.info("Authenticating Paradex client via external signer")
+            client.init_account(
+                ExternalSignerAccount(
+                    config=client.fetch_system_config(),
+                    l2_address=cast(str, config.PARADEX_ACCOUNT_ADDRESS),
+                    l2_public_key=cast(str, config.PARADEX_ACCOUNT_PUBLIC_KEY),
+                    signer=HeaderSigner(
+                        header=config.PARADEX_SIGNER_HEADER,
+                        signature=cast(str, config.PARADEX_SIGNER_SIGNATURE),
+                    ),
+                )
+            )
+            logger.info("Paradex client authenticated account=%s", client.account)
+        elif config.PARADEX_ACCOUNT_PRIVATE_KEY:
+            response = client.fetch_system_config()
             if config.PARADEX_ACCOUNT_ADDRESS:
                 # Use SubkeyAccount for any L2 key + address pair.
                 # Works for both main account keys and registered subkeys
@@ -105,14 +160,15 @@ async def get_paradex_client() -> ParadexApiClient:
                     l1_address="0x0000000000000000000000000000000000000000",
                     l2_private_key=config.PARADEX_ACCOUNT_PRIVATE_KEY,
                 )
-            _paradex_client.init_account(acc)
-            logger.info("Paradex client authenticated account=%s", _paradex_client.account)
+            client.init_account(acc)
+            logger.info("Paradex client authenticated account=%s", client.account)
         elif config.PARADEX_JWT_TOKEN:
             logger.info("Authenticating Paradex client via JWT token")
-            _paradex_client.auto_auth = False  # no account to re-sign with
-            _paradex_client.set_token(config.PARADEX_JWT_TOKEN)
+            client.auto_auth = False  # no account to re-sign with
+            client.set_token(config.PARADEX_JWT_TOKEN)
 
-        return _paradex_client
+        _paradex_client = client
+        return client
 
 
 async def get_authenticated_paradex_client() -> ParadexApiClient:

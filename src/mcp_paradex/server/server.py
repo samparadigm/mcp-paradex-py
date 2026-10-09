@@ -207,7 +207,8 @@ def create_server() -> FastMCP:
         name=config.SERVER_NAME,
         instructions="""Paradex MCP Server — spot, perpetuals, and options trading on the Paradex chain.
 
-Authentication: Set PARADEX_ACCOUNT_PRIVATE_KEY for account/trading tools.
+Authentication: Set PARADEX_ACCOUNT_PRIVATE_KEY for account/trading tools, or use
+signer mode (PARADEX_SIGNER_HEADER) to trade through a signing proxy with no private key.
 Market data tools work without authentication.
 
 Tool categories:
