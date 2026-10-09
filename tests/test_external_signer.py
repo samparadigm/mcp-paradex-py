@@ -166,24 +166,39 @@ def test_http_client_routes_through_the_env_proxy(proxy_env):
     assert transport._pool._proxy_url.host == b"proxy.internal"  # type: ignore[attr-defined]
 
 
-def test_http_client_skips_the_proxy_for_no_proxy_hosts(proxy_env):
-    proxy_env.setenv("HTTPS_PROXY", "http://proxy.internal:8080")
-    proxy_env.setenv("NO_PROXY", "paradex.trade,10.0.0.1,localhost")
-
-    client = client_module._http_client()
-
-    for url in ("https://api.prod.paradex.trade/v1", "https://10.0.0.1/", "https://localhost/"):
-        assert _transport_for(client, url) is client._transport
-    assert _transport_for(client, "https://example.com/") is not client._transport
+def _proxy_for(client: httpx.Client, url: str) -> str | None:
+    pool = _transport_for(client, url)._pool  # type: ignore[attr-defined]
+    proxy = getattr(pool, "_proxy_url", None)
+    return None if proxy is None else str(proxy)
 
 
-def test_http_client_with_no_proxy_star_uses_no_proxy(proxy_env):
-    proxy_env.setenv("ALL_PROXY", "http://proxy.internal:8080")
-    proxy_env.setenv("NO_PROXY", "*")
+@pytest.mark.parametrize(
+    "env",
+    [
+        {"HTTPS_PROXY": "proxy.internal:8080"},
+        {"ALL_PROXY": "http://proxy.internal:8080", "NO_PROXY": "::1,10.0.0.1"},
+        {"ALL_PROXY": "http://proxy.internal:8080", "NO_PROXY": "http://foo,localhost"},
+        {"ALL_PROXY": "http://proxy.internal:8080", "NO_PROXY": ".paradex.trade"},
+        {"ALL_PROXY": "http://proxy.internal:8080", "NO_PROXY": "foo,*"},
+    ],
+)
+def test_http_client_routes_like_an_httpx_default_client(proxy_env, env):
+    for name, value in env.items():
+        proxy_env.setenv(name, value)
 
-    client = client_module._http_client()
+    ours, httpx_default = client_module._http_client(), httpx.Client()
 
-    assert _transport_for(client, "https://api.prod.paradex.trade/v1") is client._transport
+    for url in (
+        "https://api.prod.paradex.trade/v1",
+        "https://paradex.trade/",
+        "https://[::1]/",
+        "https://10.0.0.1/",
+        "http://foo/",
+        "https://foo/",
+        "https://localhost/",
+        "https://sub.localhost/",
+    ):
+        assert _proxy_for(ours, url) == _proxy_for(httpx_default, url), url
 
 
 def test_jwt_client_routes_through_the_env_proxy(proxy_env):
