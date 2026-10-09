@@ -86,6 +86,20 @@ async def test_signer_env_missing_a_value_is_refused_on_every_call(
     assert client_module._paradex_client is None
 
 
+@needs_external_signer
+@pytest.mark.asyncio
+async def test_a_failed_signer_setup_is_retried_on_the_next_call(fake_api_client, monkeypatch):
+    _set_config(monkeypatch)
+    fake_api_client.init_account.side_effect = httpx.ConnectError("signer down")
+
+    with pytest.raises(httpx.ConnectError):
+        await client_module.get_paradex_client()
+    assert client_module._paradex_client is None
+
+    fake_api_client.init_account.side_effect = None
+    assert await client_module.get_paradex_client() is fake_api_client
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("stray", ["PARADEX_ACCOUNT_PUBLIC_KEY", "PARADEX_SIGNER_SIGNATURE"])
 async def test_signer_value_without_the_header_is_refused(fake_api_client, monkeypatch, stray):
