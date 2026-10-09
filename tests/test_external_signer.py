@@ -218,34 +218,34 @@ def signer_client(monkeypatch):
     return api
 
 
+BLOCK_TRADE_CALLS = [
+    (
+        "paradex_block_trade_create_offer_based",
+        {
+            "market_id": "BTC-USD-PERP",
+            "min_price": "1",
+            "max_price": "2",
+            "min_size": "1",
+            "max_size": "2",
+            "counterparty_accounts": [],
+        },
+    ),
+    (
+        "paradex_block_trade_submit_offer",
+        {
+            "block_trade_id": "b1",
+            "market_id": "BTC-USD-PERP",
+            "side": "BUY",
+            "price": "1",
+            "size": "1",
+        },
+    ),
+    ("paradex_block_trade_execute", {"block_trade_id": "b1", "offer_ids": []}),
+]
+
+
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("tool", "args"),
-    [
-        (
-            "paradex_block_trade_create_offer_based",
-            {
-                "market_id": "BTC-USD-PERP",
-                "min_price": "1",
-                "max_price": "2",
-                "min_size": "1",
-                "max_size": "2",
-                "counterparty_accounts": [],
-            },
-        ),
-        (
-            "paradex_block_trade_submit_offer",
-            {
-                "block_trade_id": "b1",
-                "market_id": "BTC-USD-PERP",
-                "side": "BUY",
-                "price": "1",
-                "size": "1",
-            },
-        ),
-        ("paradex_block_trade_execute", {"block_trade_id": "b1", "offer_ids": []}),
-    ],
-)
+@pytest.mark.parametrize(("tool", "args"), BLOCK_TRADE_CALLS)
 async def test_block_trade_signing_is_refused_in_signer_mode(signer_client, tool, args):
     with pytest.raises(ToolError, match="not available in signer mode"):
         await server.call_tool(tool, args)
@@ -255,6 +255,22 @@ async def test_block_trade_signing_is_refused_in_signer_mode(signer_client, tool
     signer_client.create_block_trade.assert_not_called()
     signer_client.create_block_trade_offer.assert_not_called()
     signer_client.execute_block_trade.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("tool", "args"), BLOCK_TRADE_CALLS)
+async def test_block_trade_without_an_account_is_refused(monkeypatch, tool, args):
+    api = MagicMock(account=None)
+    monkeypatch.setattr(client_module, "_paradex_client", api)
+    monkeypatch.setattr(config, "PARADEX_SIGNER_HEADER", None)
+    monkeypatch.setattr(config, "PARADEX_JWT_TOKEN", "jwt")
+
+    with pytest.raises(ToolError, match="require a signing account"):
+        await server.call_tool(tool, args)
+
+    api.create_block_trade.assert_not_called()
+    api.create_block_trade_offer.assert_not_called()
+    api.execute_block_trade.assert_not_called()
 
 
 def test_signer_mode_without_the_sdk_support_says_so(monkeypatch):
