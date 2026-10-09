@@ -8,12 +8,21 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
-from paradex_py.account.external_signer import ExternalSignerAccount, HeaderSigner
+from paradex_py.account.account import ParadexAccount
 
 import mcp_paradex.utils.paradex_client as client_module
 from mcp_paradex.server.server import server
 
 config = client_module.config
+
+try:
+    from paradex_py.account.external_signer import ExternalSignerAccount, HeaderSigner
+except ImportError:
+    ExternalSignerAccount = HeaderSigner = None
+
+needs_external_signer = pytest.mark.skipif(
+    ExternalSignerAccount is None, reason="paradex-py has no ExternalSignerAccount"
+)
 
 SIGNER_ENV = {
     "PARADEX_SIGNER_HEADER": "X-Signer-Header",
@@ -45,6 +54,7 @@ def fake_api_client(monkeypatch):
         yield api
 
 
+@needs_external_signer
 @pytest.mark.asyncio
 async def test_signer_env_builds_an_account_with_no_private_key(fake_api_client, monkeypatch):
     _set_config(monkeypatch)
@@ -90,6 +100,7 @@ async def test_signer_value_without_the_header_is_refused(fake_api_client, monke
         await client_module.get_paradex_client()
 
 
+@needs_external_signer
 @pytest.mark.asyncio
 async def test_signer_wins_over_a_private_key_and_warns(fake_api_client, monkeypatch, caplog):
     _set_config(monkeypatch, PARADEX_ACCOUNT_PRIVATE_KEY="0x1")
@@ -163,7 +174,7 @@ def test_http_client_with_no_proxy_star_uses_no_proxy(proxy_env):
 @pytest.fixture
 def signer_client(monkeypatch):
     api = MagicMock()
-    api.account = MagicMock(spec=ExternalSignerAccount)
+    api.account = MagicMock(spec=ParadexAccount)
     monkeypatch.setattr(client_module, "_paradex_client", api)
     monkeypatch.setattr(client_module.config, "PARADEX_SIGNER_HEADER", "X-Signer-Header")
     return api
