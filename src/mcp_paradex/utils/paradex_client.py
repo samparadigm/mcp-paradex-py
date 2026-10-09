@@ -29,6 +29,11 @@ _client_lock = asyncio.Lock()
 _request_bearer_token: ContextVar[str | None] = ContextVar("bearer_token", default=None)
 
 
+def _transport(proxy: str | None = None) -> httpx.HTTPTransport:
+    """A transport that retries a connection once, so a stale pooled connection reconnects."""
+    return httpx.HTTPTransport(proxy=proxy, retries=1)
+
+
 def _proxy_mounts() -> dict[str, httpx.BaseTransport | None]:
     """The proxy mounts httpx builds from HTTP(S)_PROXY, ALL_PROXY and NO_PROXY with trust_env."""
     env = urllib.request.getproxies()
@@ -39,7 +44,7 @@ def _proxy_mounts() -> dict[str, httpx.BaseTransport | None]:
     for scheme in ("http", "https", "all"):
         if url := env.get(scheme):
             proxy = url if "://" in url else f"http://{url}"
-            mounts[f"{scheme}://"] = httpx.HTTPTransport(proxy=proxy, retries=1)
+            mounts[f"{scheme}://"] = _transport(proxy)
     for host in no_proxy:
         mounts[_no_proxy_pattern(host)] = None
     return mounts
@@ -57,13 +62,13 @@ def _no_proxy_pattern(host: str) -> str:
 
 
 def _http_client() -> httpx.Client:
-    """An httpx client whose connections retry once, so a stale pooled connection reconnects.
+    """An httpx client built on `_transport`.
 
     A client given its own transport skips proxy env vars, so the proxies are mounted here.
     httpx still reads SSL_CERT_FILE and SSL_CERT_DIR for every transport.
     """
     return httpx.Client(
-        transport=httpx.HTTPTransport(retries=1),
+        transport=_transport(),
         mounts=_proxy_mounts(),
         timeout=httpx.Timeout(30.0),
     )
