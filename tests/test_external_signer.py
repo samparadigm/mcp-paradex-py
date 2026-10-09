@@ -186,6 +186,14 @@ def test_http_client_with_no_proxy_star_uses_no_proxy(proxy_env):
     assert _transport_for(client, "https://api.prod.paradex.trade/v1") is client._transport
 
 
+def test_jwt_client_routes_through_the_env_proxy(proxy_env):
+    proxy_env.setenv("HTTPS_PROXY", "http://proxy.internal:8080")
+
+    http = client_module._make_jwt_client("jwt").client
+
+    assert _transport_for(http, "https://api.prod.paradex.trade/v1") is not http._transport
+
+
 @pytest.fixture
 def signer_client(monkeypatch):
     api = MagicMock()
