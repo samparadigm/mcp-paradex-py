@@ -67,6 +67,7 @@ async def test_signer_env_builds_an_account_with_no_private_key(fake_api_client,
     assert account.signer.header == "X-Signer-Header"
     assert account.signer.signature == "stand-in"
     assert hex(account.l2_address) == SIGNER_ENV["PARADEX_ACCOUNT_ADDRESS"]
+    assert hex(account.l2_public_key) == SIGNER_ENV["PARADEX_ACCOUNT_PUBLIC_KEY"]
 
 
 @pytest.mark.asyncio
