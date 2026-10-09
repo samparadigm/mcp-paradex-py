@@ -12,7 +12,6 @@ from typing import Any, cast
 
 import httpx
 from paradex_py.account.account import ParadexAccount
-from paradex_py.account.external_signer import ExternalSignerAccount, HeaderSigner
 from paradex_py.account.subkey_account import SubkeyAccount
 from paradex_py.api.api_client import ParadexApiClient
 from paradex_py.api.protocols import DefaultRetryStrategy
@@ -84,6 +83,24 @@ def _make_jwt_client(jwt: str) -> ParadexApiClient:
     return client
 
 
+def _signer_account(client: ParadexApiClient) -> ParadexAccount:
+    try:
+        from paradex_py.account.external_signer import ExternalSignerAccount, HeaderSigner
+    except ImportError as e:
+        raise ValueError(
+            "Signer mode (PARADEX_SIGNER_HEADER) needs a paradex-py with ExternalSignerAccount"
+        ) from e
+    return ExternalSignerAccount(
+        config=client.fetch_system_config(),
+        l2_address=cast(str, config.PARADEX_ACCOUNT_ADDRESS),
+        l2_public_key=cast(str, config.PARADEX_ACCOUNT_PUBLIC_KEY),
+        signer=HeaderSigner(
+            header=cast(str, config.PARADEX_SIGNER_HEADER),
+            signature=cast(str, config.PARADEX_SIGNER_SIGNATURE),
+        ),
+    )
+
+
 async def get_paradex_client() -> ParadexApiClient:
     """
     Get or initialize the Paradex client.
@@ -129,17 +146,7 @@ async def get_paradex_client() -> ParadexApiClient:
 
         if config.PARADEX_SIGNER_HEADER:
             logger.info("Authenticating Paradex client via external signer")
-            client.init_account(
-                ExternalSignerAccount(
-                    config=client.fetch_system_config(),
-                    l2_address=cast(str, config.PARADEX_ACCOUNT_ADDRESS),
-                    l2_public_key=cast(str, config.PARADEX_ACCOUNT_PUBLIC_KEY),
-                    signer=HeaderSigner(
-                        header=config.PARADEX_SIGNER_HEADER,
-                        signature=cast(str, config.PARADEX_SIGNER_SIGNATURE),
-                    ),
-                )
-            )
+            client.init_account(_signer_account(client))
             logger.info("Paradex client authenticated account=%s", client.account)
         elif config.PARADEX_ACCOUNT_PRIVATE_KEY:
             response = client.fetch_system_config()

@@ -21,7 +21,6 @@ from typing import Annotated, Any
 from mcp.server.fastmcp.server import Context
 from mcp.types import ToolAnnotations
 from paradex_py.account.account import ParadexAccount
-from paradex_py.account.external_signer import ExternalSignerAccount
 from paradex_py.api.api_client import ParadexApiClient
 from paradex_py.api.generated.requests import (
     BlockExecuteRequest,
@@ -53,6 +52,7 @@ from mcp_paradex.models import (
     OrderSideEnum,
 )
 from mcp_paradex.server.server import server
+from mcp_paradex.utils.config import config
 from mcp_paradex.utils.ctx import ctx_info
 from mcp_paradex.utils.errors import check_response
 from mcp_paradex.utils.paradex_client import get_authenticated_paradex_client
@@ -65,7 +65,7 @@ def _ms_from_now(minutes: int) -> int:
 
 
 def _block_trade_account(client: ParadexApiClient) -> ParadexAccount:
-    if isinstance(client.account, ExternalSignerAccount):
+    if config.PARADEX_SIGNER_HEADER:
         raise ValueError(
             "Block trades are not available in signer mode (PARADEX_SIGNER_HEADER). "
             "Set PARADEX_ACCOUNT_PRIVATE_KEY to trade blocks."

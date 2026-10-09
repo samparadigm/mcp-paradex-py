@@ -1,6 +1,7 @@
 """The external-signer mode: no private key in the server, a signing proxy holds it."""
 
 import logging
+import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -164,6 +165,7 @@ def signer_client(monkeypatch):
     api = MagicMock()
     api.account = MagicMock(spec=ExternalSignerAccount)
     monkeypatch.setattr(client_module, "_paradex_client", api)
+    monkeypatch.setattr(client_module.config, "PARADEX_SIGNER_HEADER", "X-Signer-Header")
     return api
 
 
@@ -204,3 +206,9 @@ async def test_block_trade_signing_is_refused_in_signer_mode(signer_client, tool
     signer_client.create_block_trade.assert_not_called()
     signer_client.create_block_trade_offer.assert_not_called()
     signer_client.execute_block_trade.assert_not_called()
+
+
+def test_signer_mode_without_the_sdk_support_says_so(monkeypatch):
+    monkeypatch.setitem(sys.modules, "paradex_py.account.external_signer", None)
+    with pytest.raises(ValueError, match="needs a paradex-py with ExternalSignerAccount"):
+        client_module._signer_account(MagicMock())
