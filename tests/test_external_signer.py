@@ -1,7 +1,6 @@
 """The external-signer mode: no private key in the server, a signing proxy holds it."""
 
 import logging
-import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -16,7 +15,7 @@ from mcp_paradex.server.server import server
 config = client_module.config
 
 try:
-    from paradex_py.account.external_signer import ExternalSignerAccount, HeaderSigner
+    from paradex_py.account import ExternalSignerAccount, HeaderSigner
 except ImportError:
     ExternalSignerAccount = HeaderSigner = None
 
@@ -275,6 +274,8 @@ async def test_block_trade_without_an_account_is_refused(monkeypatch, tool, args
 
 
 def test_signer_mode_without_the_sdk_support_says_so(monkeypatch):
-    monkeypatch.setitem(sys.modules, "paradex_py.account.external_signer", None)
+    import paradex_py.account
+
+    monkeypatch.delattr(paradex_py.account, "ExternalSignerAccount", raising=False)
     with pytest.raises(ValueError, match="needs a paradex-py with ExternalSignerAccount"):
         client_module._signer_account(MagicMock())

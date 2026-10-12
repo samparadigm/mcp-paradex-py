@@ -90,7 +90,7 @@ def _make_jwt_client(jwt: str) -> ParadexApiClient:
 
 def _signer_account(client: ParadexApiClient) -> ParadexAccount:
     try:
-        from paradex_py.account.external_signer import ExternalSignerAccount, HeaderSigner
+        from paradex_py.account import ExternalSignerAccount, HeaderSigner
     except ImportError as e:
         raise ValueError(
             "Signer mode (PARADEX_SIGNER_HEADER) needs a paradex-py with ExternalSignerAccount"
