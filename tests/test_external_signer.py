@@ -178,6 +178,7 @@ def _proxy_for(client: httpx.Client, url: str) -> str | None:
         {"HTTPS_PROXY": "proxy.internal:8080"},
         {"ALL_PROXY": "http://proxy.internal:8080", "NO_PROXY": "::1,10.0.0.1"},
         {"ALL_PROXY": "http://proxy.internal:8080", "NO_PROXY": "http://foo,localhost"},
+        {"ALL_PROXY": "http://proxy.internal:8080", "NO_PROXY": "LOCALHOST"},
         {"ALL_PROXY": "http://proxy.internal:8080", "NO_PROXY": ".paradex.trade"},
         {"ALL_PROXY": "http://proxy.internal:8080", "NO_PROXY": "foo,*"},
     ],
