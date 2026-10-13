@@ -116,4 +116,4 @@ class TestConfigAutoPopulatesAddress:
                 "PARADEX_AUTH_SERVER_URL": "",
             }
         )
-        assert cfg.Config.is_configured() is True
+        assert cfg.config.is_configured() is True

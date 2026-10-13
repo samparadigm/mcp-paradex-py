@@ -20,6 +20,8 @@ from typing import Annotated, Any
 
 from mcp.server.fastmcp.server import Context
 from mcp.types import ToolAnnotations
+from paradex_py.account.account import ParadexAccount
+from paradex_py.api.api_client import ParadexApiClient
 from paradex_py.api.generated.requests import (
     BlockExecuteRequest,
     BlockOfferInfo,
@@ -50,6 +52,7 @@ from mcp_paradex.models import (
     OrderSideEnum,
 )
 from mcp_paradex.server.server import server
+from mcp_paradex.utils.config import config
 from mcp_paradex.utils.ctx import ctx_info
 from mcp_paradex.utils.errors import check_response
 from mcp_paradex.utils.paradex_client import get_authenticated_paradex_client
@@ -59,6 +62,20 @@ _DEFAULT_EXPIRATION_MINUTES = 5
 
 def _ms_from_now(minutes: int) -> int:
     return int(time.time() * 1000) + minutes * 60 * 1000
+
+
+def _block_trade_account(client: ParadexApiClient) -> ParadexAccount:
+    if config.PARADEX_SIGNER_HEADER:
+        raise ValueError(
+            "Block trades are not available in signer mode (PARADEX_SIGNER_HEADER). "
+            "Set PARADEX_ACCOUNT_PRIVATE_KEY to trade blocks."
+        )
+    if client.account is None:
+        raise ValueError(
+            "Block trades require a signing account; set PARADEX_ACCOUNT_PRIVATE_KEY. "
+            "Signer mode (PARADEX_SIGNER_HEADER) cannot sign block trades."
+        )
+    return client.account
 
 
 def _dec(value: float | str | None) -> Decimal:
@@ -226,8 +243,7 @@ async def create_offer_based_block_trade(
     outside this tool.
     """
     client = await get_authenticated_paradex_client()
-    if client.account is None:
-        raise ValueError("Block trades require a signing account; set PARADEX_ACCOUNT_PRIVATE_KEY.")
+    account = _block_trade_account(client)
 
     nonce = str(time.time_ns())
     expiration_ms = _ms_from_now(expiration_minutes)
@@ -246,14 +262,14 @@ async def create_offer_based_block_trade(
         expiration=expiration_ms,
         trades=[constraint_trade],
     )
-    signature = client.account.build_block_trade_signature(block_msg)
+    signature = account.build_block_trade_signature(block_msg)
 
-    required_signers = [client.account.l2_address, *counterparty_accounts]
+    required_signers = [account.l2_address, *counterparty_accounts]
     request = BlockTradeRequest(
         block_expiration=expiration_ms,
         nonce=nonce,
         required_signers=required_signers,
-        signatures={client.account.l2_address: signature},
+        signatures={account.l2_address: signature},
         trades={
             trade_id: BlockTradeInfo(
                 trade_constraints=BlockTradeConstraints(
@@ -309,8 +325,7 @@ async def submit_block_trade_offer(
     accept or ignore it.
     """
     client = await get_authenticated_paradex_client()
-    if client.account is None:
-        raise ValueError("Block-trade offers require a signing account.")
+    account = _block_trade_account(client)
 
     nonce = str(time.time_ns())
     expiration_ms = _ms_from_now(expiration_minutes)
@@ -318,7 +333,7 @@ async def submit_block_trade_offer(
 
     # The offerer signs a Trade where their side is the maker_order (server convention).
     maker_order_msg = BlockTradeOrderMsg(
-        account=client.account.l2_address,
+        account=account.l2_address,
         side=str(side),
         order_type=order_type,
         size=_dec(size),
@@ -337,17 +352,17 @@ async def submit_block_trade_offer(
         block_trade_id=block_trade_id,
         trades=[trade_msg],
     )
-    signature = client.account.build_block_trade_offer_signature(offer_msg)
+    signature = account.build_block_trade_offer_signature(offer_msg)
 
     request = BlockOfferRequest(
         nonce=nonce,
-        offering_account=client.account.l2_address,
+        offering_account=account.l2_address,
         signature=signature,
         trades={
             offer_trade_id: BlockOfferInfo(
                 offerer_order=BlockTradeOrder.model_validate(
                     {
-                        "account": client.account.l2_address,
+                        "account": account.l2_address,
                         "side": str(side),
                         "type": order_type,
                         "size": size,
@@ -408,20 +423,19 @@ async def execute_block_trade(
     is signed.
     """
     client = await get_authenticated_paradex_client()
-    if client.account is None:
-        raise ValueError("Block-trade execution requires a signing account.")
+    account = _block_trade_account(client)
 
     nonce = str(time.time_ns())
 
     if offer_ids:
         offers = [client.get_block_trade_offer(block_trade_id, oid) for oid in offer_ids]
-        signatures = client.account.build_executor_signatures_for_offers(
+        signatures = account.build_executor_signatures_for_offers(
             offers, expiration_minutes=expiration_minutes
         )
         selected_offers: list[str] | None = list(offer_ids)
     else:
         block = client.get_block_trade(block_trade_id)
-        signatures = client.account.build_executor_signature_for_block(
+        signatures = account.build_executor_signature_for_block(
             block, expiration_minutes=expiration_minutes
         )
         selected_offers = None

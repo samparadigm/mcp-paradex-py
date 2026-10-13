@@ -229,6 +229,25 @@ caddy run --config /etc/caddy/Caddyfile
 
 ---
 
+## Signer mode and outbound proxies
+
+Any of the options above can run without a private key when a signing proxy holds it.
+Replace `PARADEX_ACCOUNT_PRIVATE_KEY` with:
+
+| Key | Value |
+|---|---|
+| `PARADEX_SIGNER_HEADER` | header the proxy reads the message hash from |
+| `PARADEX_SIGNER_SIGNATURE` | placeholder the proxy replaces with the signature |
+| `PARADEX_ACCOUNT_ADDRESS` | your Paradex account address |
+| `PARADEX_ACCOUNT_PUBLIC_KEY` | public key of the key the proxy holds |
+| `HTTPS_PROXY` | URL of the signing proxy |
+
+The server sends Paradex API requests through `HTTPS_PROXY`, `HTTP_PROXY` or `ALL_PROXY`,
+skips hosts in `NO_PROXY`, and trusts the CA bundle in `SSL_CERT_FILE`. Block-trade tools
+are not available in signer mode.
+
+---
+
 ## Verifying the deployment
 
 Once deployed, test the endpoint before connecting it to a client:

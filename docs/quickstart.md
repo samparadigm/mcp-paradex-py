@@ -379,3 +379,9 @@ Replace `your-username` with the output of `whoami`. Verify the path first with 
 
 **Want to test without a private key first?**
 Market data tools work without any credentials. Just omit `PARADEX_ACCOUNT_PRIVATE_KEY` from the config.
+
+**Trading through a signing proxy**
+If a signing proxy holds your key, leave `PARADEX_ACCOUNT_PRIVATE_KEY` out and set
+`PARADEX_SIGNER_HEADER`, `PARADEX_SIGNER_SIGNATURE`, `PARADEX_ACCOUNT_ADDRESS` and
+`PARADEX_ACCOUNT_PUBLIC_KEY`, plus `HTTPS_PROXY` pointing at the proxy. See
+[Signer mode](../README.md#signer-mode-no-private-key) in the README.

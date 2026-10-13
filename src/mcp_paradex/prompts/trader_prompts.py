@@ -15,7 +15,8 @@ def getting_started() -> str:
     public_note = (
         ""
         if config.is_configured()
-        else "\nTo enable trading tools, set PARADEX_ACCOUNT_PRIVATE_KEY."
+        else "\nTo enable trading tools, set PARADEX_ACCOUNT_PRIVATE_KEY, "
+        "or PARADEX_SIGNER_HEADER to sign through a signing proxy."
     )
     auth_prompts = (
         "- Account & trading: position_management, create_optimal_order, hedging_strategy, portfolio_risk_assessment, liquidation_protection"

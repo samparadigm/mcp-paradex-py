@@ -101,6 +101,25 @@ Set these environment variables for authentication:
 - `PARADEX_ENVIRONMENT`: Set to `prod`, `testnet`, or `nightly` (default: `prod`)
 - `PARADEX_ACCOUNT_PRIVATE_KEY`: Your Paradex account private key
 
+#### Signer mode (no private key)
+
+To trade through a signing proxy that holds the key, set these four and leave
+`PARADEX_ACCOUNT_PRIVATE_KEY` unset:
+
+- `PARADEX_SIGNER_HEADER`: the header the server puts each message hash in, base64
+- `PARADEX_SIGNER_SIGNATURE`: the placeholder the server sends as the signature, for the proxy to replace
+- `PARADEX_ACCOUNT_ADDRESS`: your Paradex account address
+- `PARADEX_ACCOUNT_PUBLIC_KEY`: the public key of the key the proxy signs with
+
+Every tool call returns a configuration error while any of the four is missing. If a private key is
+also set, the server uses the signer and logs a warning. Block-trade tools are not available
+in signer mode.
+
+#### Outbound proxy
+
+The server sends Paradex API requests through `HTTPS_PROXY`, `HTTP_PROXY` or `ALL_PROXY`
+when set, skips the hosts listed in `NO_PROXY`, and trusts the CA bundle in `SSL_CERT_FILE`.
+
 ### Using .env File
 
 ```bash

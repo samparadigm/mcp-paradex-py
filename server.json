@@ -31,6 +31,41 @@
           "format": "string"
         },
         {
+          "name": "PARADEX_SIGNER_HEADER",
+          "description": "Signer mode: header the server sends each message hash in, for a signing proxy that holds the key. Needs PARADEX_SIGNER_SIGNATURE, PARADEX_ACCOUNT_ADDRESS and PARADEX_ACCOUNT_PUBLIC_KEY, and no private key.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "PARADEX_SIGNER_SIGNATURE",
+          "description": "Signer mode: placeholder the server sends as the signature, for the signing proxy to replace.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "PARADEX_ACCOUNT_ADDRESS",
+          "description": "Paradex account address. Required in signer mode.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "PARADEX_ACCOUNT_PUBLIC_KEY",
+          "description": "Signer mode: public key of the key the signing proxy holds.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "HTTPS_PROXY",
+          "description": "Proxy for Paradex API requests, such as a signing proxy. HTTP_PROXY, ALL_PROXY, NO_PROXY and SSL_CERT_FILE also apply.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
           "name": "PARADEX_ENVIRONMENT",
           "description": "Paradex environment to connect to. Defaults to 'prod'. Use 'testnet' for testing.",
           "isRequired": false,
